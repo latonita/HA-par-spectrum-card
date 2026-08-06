@@ -1,13 +1,14 @@
 {
-  "name": "as7341-spectrum-card",
-  "version": "1.0.0",
-  "description": "Home Assistant custom card for AS7341 spectral sensor visualization",
-  "main": "as7341-spectrum-card.js",
+  "name": "as734x-spectrum-card",
+  "version": "2.0.0",
+  "description": "Home Assistant custom card for AS7341 and AS7343 spectral sensors",
+  "type": "module",
+  "main": "as734x-spectrum-card.js",
   "scripts": {
-    "build": "rollup -c"
+    "build": "rollup -c",
+    "test": "node --test 'test/*.test.mjs'"
   },
-  "keywords": ["home-assistant", "lovelace", "custom-card", "as7341", "spectrum"],
-  "author": "",
+  "keywords": ["home-assistant", "lovelace", "custom-card", "as7341", "as7343", "as734x", "spectrum", "par", "ppfd"],
   "license": "MIT",
   "devDependencies": {
     "@rollup/plugin-node-resolve": "^15.0.0",

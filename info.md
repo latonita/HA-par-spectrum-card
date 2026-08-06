@@ -1,13 +1,11 @@
-# AS7341 Spectrum Card
+# AS734x Spectrum Card
 
-Visualize your AS7341 spectral sensor data with beautiful spectrum charts!
+Plot the output of an AS7341 or AS7343 spectral sensor as a spectrum chart.
 
 ## Features
 
-- 📊 Real-time spectrum visualization
-- 🌈 8-channel spectral data (415nm - 680nm)
-- 🌱 PAR range analysis (400-700nm)
-- 🎨 Color-coded wavelength display
-- 📱 Responsive design
-
-Perfect for monitoring grow lights, analyzing light quality, and optimizing plant growth conditions.
+- AS7341 (8 bands) and AS7343 (11 bands), selected automatically or with `model:`
+- Wavelength axis, tick labels and curve endpoints derived per sensor
+- Hover for per-channel readings, with Clear and NIR alongside
+- Saturation and weak-signal hints, driven by the sensor's own saturation entity when available
+- Adding another sensor is one table entry

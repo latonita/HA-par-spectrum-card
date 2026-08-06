@@ -1,285 +1,167 @@
-# AS7341 Spectrum Card
+# AS734x Spectrum Card
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
-[![GitHub Release](https://img.shields.io/github/release/goatboynz/HA-par-spectrum-card.svg)](https://github.com/goatboynz/HA-par-spectrum-card/releases)
+A Home Assistant Lovelace card that plots the output of a multi-channel spectral sensor as a spectrum chart.
 
-A beautiful custom Lovelace card for visualizing AS7341 11-channel spectral sensor data in Home Assistant. Perfect for monitoring grow lights, analyzing light quality, and optimizing plant growth conditions.
+Supports the **AS7341** (8 plotted bands) and the **AS7343** (11 plotted bands). Adding another sensor means adding
+one entry to a table, not touching the drawing code.
 
-![AS7341 Spectrum Card](https://github.com/goatboynz/HA-par-spectrum-card/blob/main/Screenshot%202025-11-10%20183434.png)
+![Screenshot](Screenshot%202025-11-10%20183434.png)
 
-## ✨ Features
+This is a fork of [goatboynz/HA-par-spectrum-card](https://github.com/goatboynz/HA-par-spectrum-card), which
+supports the AS7341 only.
 
-- 🌈 **Beautiful spectrum visualization** - Smooth rainbow gradient showing your light's spectral distribution
-- 📊 **Interactive tooltips** - Hover over the spectrum to see exact values at any wavelength
-- 🎯 **8 spectral channels** - Displays all AS7341 channels (415nm - 680nm)
-- 💡 **Clear & NIR support** - Shows Clear and Near-Infrared readings
-- ⚠️ **Smart calibration warnings** - Automatically detects sensor saturation or weak signals
-- 🎨 **Modern design** - Sleek, gradient-based UI that fits perfectly with Home Assistant
-- 📱 **Fully responsive** - Works great on desktop, tablet, and mobile
+## Installation
 
-## 📦 Installation
+### HACS
 
-### Method 1: HACS (Recommended)
+1. HACS → Frontend → three-dot menu → Custom repositories
+1. Add `https://github.com/latonita/HA-par-spectrum-card`, category **Lovelace**
+1. Install **AS734x Spectrum Card**
+1. Reload your browser
 
-1. Open **HACS** in Home Assistant
-2. Go to **Frontend** section
-3. Click the **⋮** menu (top right) → **Custom repositories**
-4. Add repository: `https://github.com/goatboynz/HA-par-spectrum-card`
-5. Category: **Lovelace**
-6. Click **Add** → Find "AS7341 Spectrum Card" → **Download**
-7. **Restart** Home Assistant
-8. Clear browser cache (Ctrl+F5)
+### Manual
 
-### Method 2: Manual Installation
+1. Copy `as734x-spectrum-card.js` to `config/www/`
+1. Settings → Dashboards → Resources → Add Resource
+1. URL `/local/as734x-spectrum-card.js`, type **JavaScript Module**
+1. Restart Home Assistant
 
-1. Download [`as7341-spectrum-card.js`](https://github.com/goatboynz/HA-par-spectrum-card/releases/latest)
-2. Copy to `config/www/as7341-spectrum-card.js`
-3. Add resource in Lovelace:
-   - Go to **Settings** → **Dashboards** → **Resources**
-   - Click **Add Resource**
-   - URL: `/local/as7341-spectrum-card.js`
-   - Type: **JavaScript Module**
-4. **Restart** Home Assistant
+> Upgrading from the original card? The resource filename changed from `as7341-spectrum-card.js` to
+> `as734x-spectrum-card.js`. Update the resource URL, then reload. Existing dashboard cards keep working, see
+> [Compatibility](#compatibility).
 
----
+## Card Configuration
 
-## ⚙️ ESPHome Configuration
+```yaml
+type: custom:as734x-spectrum-card
+title: Light Spectrum
+model: as7343
+entities:
+  f1: sensor.as7343_f1
+  f2: sensor.as7343_f2
+  fz: sensor.as7343_fz
+  f3: sensor.as7343_f3
+  f4: sensor.as7343_f4
+  fy: sensor.as7343_fy
+  f5: sensor.as7343_f5
+  fxl: sensor.as7343_fxl
+  f6: sensor.as7343_f6
+  f7: sensor.as7343_f7
+  f8: sensor.as7343_f8
+  clear: sensor.as7343_clear
+  nir: sensor.as7343_nir
+  saturation_level: sensor.as7343_saturation
+```
 
-Configure your AS7341 sensor in ESPHome with optimized settings:
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `entities` | map | **required** | Channel key to entity id. Every key is optional; only what you list is drawn. |
+| `model` | string | auto | `as7341` or `as7343`. Detected from the channel keys when omitted. |
+| `title` | string | `<model> Light Spectrum` | Card heading. |
+| `axis` | `[min, max]` | per model | Wavelength range of the x-axis, in nm. |
+| `full_scale` | number | `65535` | Highest count a channel can report, used for the saturation hint when no `saturation_level` entity is given. |
+
+`clear` and `nir` are read but not plotted, since neither has a single centre wavelength inside the visible
+range. They appear in the tooltip.
+
+`saturation_level` is optional. When present the card uses it directly instead of guessing from `full_scale`.
+ESPHome's `as734x` platform can publish it.
+
+## Channels
+
+The card only needs the channel keys; wavelengths come from the built-in profile.
+
+### AS7341
+
+| Key | `f1` | `f2` | `f3` | `f4` | `f5` | `f6` | `f7` | `f8` | `nir` |
+|---|---|---|---|---|---|---|---|---|---|
+| nm | 415 | 445 | 480 | 515 | 555 | 590 | 630 | 680 | 910 |
+
+### AS7343
+
+| Key | `f1` | `f2` | `fz` | `f3` | `f4` | `f5` | `fy` | `fxl` | `f6` | `f7` | `f8` | `nir` |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| nm | 405 | 425 | 450 | 475 | 515 | 550 | 555 | 600 | 640 | 690 | 745 | 855 |
+
+> The AS7343 is not an AS7341 with extra channels. The two sensors carry different filter sets, so the same key
+> means a different wavelength on each. Note also that `f5` (550nm) sits **below** `fy` (555nm) even though
+> ESPHome lists `fy` first; the card sorts by wavelength, so config order does not matter.
+
+## ESPHome
 
 ```yaml
 i2c:
-  sda: GPIO21
-  scl: GPIO22
-  scan: true
+  sda: GPIOXX
+  scl: GPIOXX
 
 sensor:
-  - platform: as7341
-    # Integration time settings - adjust based on your light levels
-    atime: 29        # Integration time (0-255, each = 2.78ms)
-    astep: 599       # Integration steps (0-65534)
-    gain: X8         # Gain: X0.5, X1, X2, X4, X8, X16, X32, X64, X128, X256, X512
-    update_interval: 5s
-    
-    f1:
-      name: "AS7341 F1 415nm"
-    f2:
-      name: "AS7341 F2 445nm"
-    f3:
-      name: "AS7341 F3 480nm"
-    f4:
-      name: "AS7341 F4 515nm"
-    f5:
-      name: "AS7341 F5 555nm"
-    f6:
-      name: "AS7341 F6 590nm"
-    f7:
-      name: "AS7341 F7 630nm"
-    f8:
-      name: "AS7341 F8 680nm"
-    clear:
-      name: "AS7341 Clear"
-    nir:
-      name: "AS7341 NIR"
+  - platform: as734x
+    type: AS7343
+    gain: X8
+    atime: 29
+    astep: 599
+    update_interval: 10s
+    counts:
+      f1: { name: "F1" }
+      f2: { name: "F2" }
+      fz: { name: "FZ" }
+      f3: { name: "F3" }
+      f4: { name: "F4" }
+      fy: { name: "FY" }
+      f5: { name: "F5" }
+      fxl: { name: "FXL" }
+      f6: { name: "F6" }
+      f7: { name: "F7" }
+      f8: { name: "F8" }
+      nir: { name: "NIR" }
+      clear: { name: "Clear" }
+    saturation_level:
+      name: "Saturation"
 ```
 
-### Tuning Integration Time
+Use `type: AS7341` for the AS7341. The older `as7341` platform works too, but reports its counts byte-swapped;
+prefer `as734x`.
 
-Integration time = `(atime + 1) × (astep + 1) × 2.78µs`
+Full scale for a reading is `(atime + 1) x (astep + 1)`, capped at 65535, so the defaults above top out at
+18000. Set `full_scale` on the card to match, or wire up `saturation_level` and let the card read it.
 
-**If all channels show the same high value (saturated):**
-- Decrease `gain`: X128 → X64 → X32 → X16 → X8
-- Or decrease `atime`: 100 → 50 → 29
-- Or decrease `astep`: 999 → 599 → 299
+## Compatibility
 
-**If all values are too low (near 0):**
-- Increase `gain`: X8 → X16 → X32 → X64
-- Or increase `atime`: 29 → 50 → 100
-- Or increase `astep`: 599 → 999
+Dashboards using `type: custom:as7341-spectrum-card` keep working. That element name stays registered and
+resolves to the same card, and with no `model:` the AS7341 profile is selected. Nothing to change.
 
-**Recommended starting points:**
-- Bright indoor/outdoor: `atime: 29, astep: 599, gain: X8`
-- Normal indoor: `atime: 50, astep: 999, gain: X16`
-- Dim lighting: `atime: 100, astep: 999, gain: X64`
+## Adding Another Sensor
 
----
+Add an entry to `SENSOR_PROFILES` at the top of `as734x-spectrum-card.js`:
 
-## 🎨 Card Configuration
-
-Add the card to your Lovelace dashboard:
-
-```yaml
-type: custom:as7341-spectrum-card
-title: Light Spectrum Analysis
-entities:
-  f1: sensor.as7341_f1_415nm
-  f2: sensor.as7341_f2_445nm
-  f3: sensor.as7341_f3_480nm
-  f4: sensor.as7341_f4_515nm
-  f5: sensor.as7341_f5_555nm
-  f6: sensor.as7341_f6_590nm
-  f7: sensor.as7341_f7_630nm
-  f8: sensor.as7341_f8_680nm
-  clear: sensor.as7341_clear      # Optional
-  nir: sensor.as7341_nir          # Optional
+```js
+as7999: {
+  label: 'AS7999',
+  axis: [350, 800],
+  channels: [
+    { key: 'a1', name: 'A1', wavelength: 360, color: '#8B00FF' },
+  ],
+  aux: [
+    { key: 'clear', name: 'Clear', color: '#CCCCCC' },
+  ],
+},
 ```
 
-### Configuration Options
+Sorting, axis range, curve endpoints, tick labels, tooltips and the stub config all derive from that entry.
+Channels may be listed in any order.
 
-| Option | Type | Required | Default | Description |
-|--------|------|----------|---------|-------------|
-| `entities` | object | **Yes** | - | Map of channel names to entity IDs |
-| `entities.f1` - `entities.f8` | string | **Yes** | - | Spectral channel entities (415-680nm) |
-| `entities.clear` | string | No | - | Clear channel entity (optional) |
-| `entities.nir` | string | No | - | Near-infrared channel entity (optional) |
-| `title` | string | No | `"Light Spectrum"` | Card title |
+## Development
 
-### Channel Mapping
-
-| Channel | Wavelength | Color | Description |
-|---------|------------|-------|-------------|
-| `f1` | 415nm | Violet | UV-A / Deep violet |
-| `f2` | 445nm | Blue | Royal blue |
-| `f3` | 480nm | Cyan | Sky blue |
-| `f4` | 515nm | Green | True green |
-| `f5` | 555nm | Yellow-Green | Lime green |
-| `f6` | 590nm | Yellow | Amber |
-| `f7` | 630nm | Orange | Deep orange |
-| `f8` | 680nm | Red | Deep red |
-| `clear` | - | - | Broadband visible light |
-| `nir` | ~910nm | - | Near-infrared |
-
-### Configuration Options
-
-| Option | Type | Required | Default | Description |
-|--------|------|----------|---------|-------------|
-| `entities` | object | Yes | - | Map of channel names to entity IDs |
-| `title` | string | No | "Light Spectrum" | Card title |
-
-### Entity Mapping
-
-Map each AS7341 channel (f1-f8) to your Home Assistant entity:
-
-```yaml
-entities:
-  f1: sensor.415nm      # 415nm - Violet
-  f2: sensor.445nm      # 445nm - Blue
-  f3: sensor.480nm      # 480nm - Cyan
-  f4: sensor.515nm      # 515nm - Green
-  f5: sensor.555nm      # 555nm - Yellow-Green
-  f6: sensor.590nm      # 590nm - Yellow
-  f7: sensor.630nm      # 630nm - Orange
-  f8: sensor.680nm      # 680nm - Red
+```bash
+npm test     # unit tests, no browser needed
+npm run build
 ```
 
-You can use any entity naming scheme - just map them to the correct channels.
+## Credits
 
----
+Original card by [goatboynz](https://github.com/goatboynz). AS7343 support and the profile-driven rework in this
+fork.
 
-## 💡 How to Use
+## License
 
-### Interactive Features
-
-- **Hover over the spectrum** - See exact values at any wavelength
-- **Hover near sensor points** - View specific channel readings with color coding
-- **UV region (<400nm)** - Shows extrapolated UV values
-- **Near-IR region (>700nm)** - Shows NIR sensor data when available
-
-### Understanding the Visualization
-
-The card displays a smooth, interpolated curve based on your 8 sensor readings:
-
-- **Smooth edges** - Spectrum gracefully tapers to zero at both ends (380-750nm)
-- **Rainbow gradient** - Color-coded from violet → blue → green → yellow → orange → red
-- **Interpolation** - Values between sensor points are calculated using cubic splines
-- **Real-time updates** - Chart updates automatically when sensor values change
-
-### Calibration Warnings
-
-The card automatically detects sensor issues:
-
-- ⚠️ **Saturation warning** - All channels showing similar high values (>50,000)
-  - **Fix**: Reduce `gain` or `atime` in ESPHome
-- 📉 **Weak signal** - All values very low (<100)
-  - **Fix**: Increase `gain` or `atime` in ESPHome
-- 💡 **No light detected** - All values are zero
-  - **Fix**: Ensure sensor is exposed to light source
-
----
-
-## 🌱 About Light Spectrum & PAR
-
-**PAR (Photosynthetically Active Radiation)** is the 400-700nm wavelength range that plants use for photosynthesis.
-
-### Wavelength Effects on Plants
-
-| Range | Color | Plant Response |
-|-------|-------|----------------|
-| 380-450nm | Violet/Blue | Vegetative growth, compact structure |
-| 450-500nm | Blue | Chlorophyll absorption, photosynthesis |
-| 500-600nm | Green/Yellow | Canopy penetration, secondary photosynthesis |
-| 600-700nm | Orange/Red | Flowering, fruiting, photosynthesis |
-| 700-750nm | Far-Red/NIR | Shade avoidance, flowering timing |
-
----
-
-## 🔧 Troubleshooting
-
-### Card not appearing
-
-- ✅ Verify resource is loaded: **Settings** → **Dashboards** → **Resources**
-- ✅ Clear browser cache: **Ctrl+F5** or **Cmd+Shift+R**
-- ✅ Check browser console (F12) for errors
-- ✅ Restart Home Assistant
-
-### No data / All zeros
-
-- ✅ Verify ESPHome device is **online**
-- ✅ Check entity names match your configuration exactly
-- ✅ Ensure sensor is exposed to **light source**
-- ✅ Check **Developer Tools** → **States** for entity values
-
-### Saturation (all channels same value)
-
-- ✅ **Reduce** `gain`: X128 → X64 → X32 → X16 → X8
-- ✅ **Reduce** `atime`: 100 → 50 → 29
-- ✅ **Reduce** `astep`: 999 → 599 → 299
-
-### Weak signal (values too low)
-
-- ✅ **Increase** `gain`: X8 → X16 → X32 → X64
-- ✅ **Increase** `atime`: 29 → 50 → 100
-- ✅ Check sensor is not obstructed
-- ✅ Verify I2C connection is stable
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
----
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) file for details
-
----
-
-## 🙏 Credits
-
-- AS7341 sensor by [AMS](https://ams.com/)
-- ESPHome integration
-- Inspired by professional spectroradiometer visualizations
-
-## ⭐ Support
-
-If you find this card useful, please consider:
-- ⭐ Starring the repository
-- 🐛 Reporting issues
-- 💡 Suggesting features
-- 🔧 Contributing improvements
-
----
-
-**Made with 🌱 for the Home Assistant community**
+MIT
