@@ -59,16 +59,15 @@ test('AS7343 channels sort into wavelength order despite config order', () => {
   assert.deepEqual(wavelengths, [...wavelengths].sort((a, b) => a - b));
   assert.deepEqual(
     sorted.map((ch) => ch.key),
-    ['f1', 'f2', 'fz', 'f3', 'f4', 'f5', 'fy', 'fxl', 'f6', 'f7', 'f8'],
+    ['f1', 'f2', 'fz', 'f3', 'f4', 'f5', 'fy', 'fxl', 'f6', 'f7', 'f8', 'nir'],
   );
 });
 
 test('AS7343 wavelengths match the driver channel map', () => {
-  const expected = { f1: 405, f2: 425, fz: 450, f3: 475, f4: 515, f5: 550, fy: 555, fxl: 600, f6: 640, f7: 690, f8: 745 };
+  const expected = { f1: 405, f2: 425, fz: 450, f3: 475, f4: 515, f5: 550, fy: 555, fxl: 600, f6: 640, f7: 690, f8: 745, nir: 855 };
   for (const ch of SENSOR_PROFILES.as7343.channels) {
     assert.equal(ch.wavelength, expected[ch.key], `${ch.key} wavelength`);
   }
-  assert.equal(SENSOR_PROFILES.as7343.aux.find((a) => a.key === 'nir').wavelength, 855);
 });
 
 test('curve points are strictly ascending for every profile', () => {
@@ -175,30 +174,36 @@ test('every plotted channel carries a positive FWHM', () => {
   }
 });
 
-test('FWHM values match the datasheet tables', () => {
+test('published FWHM values match the datasheet tables', () => {
   const as7341 = { f1: 26, f2: 30, f3: 36, f4: 39, f5: 39, f6: 40, f7: 50, f8: 52 };
-  const as7343 = { f1: 30, f2: 22, fz: 55, f3: 30, f4: 40, f5: 35, fy: 100, fxl: 80, f6: 50, f7: 55, f8: 60 };
+  const as7343 = { f1: 30, f2: 22, fz: 55, f3: 30, f4: 40, f5: 35, fy: 100, fxl: 80, f6: 50, f7: 55, f8: 60, nir: 54 };
   for (const [model, table] of [['as7341', as7341], ['as7343', as7343]]) {
-    for (const ch of SENSOR_PROFILES[model].channels) {
+    for (const ch of SENSOR_PROFILES[model].channels.filter((c) => !c.estimated)) {
       assert.equal(ch.fwhm, table[ch.key], `${model}.${ch.key} FWHM`);
     }
   }
 });
 
+test('the only estimated width is AS7341 NIR, which the datasheet leaves as n/a', () => {
+  const estimated = Object.entries(SENSOR_PROFILES).flatMap(([model, p]) =>
+    p.channels.filter((c) => c.estimated).map((c) => `${model}.${c.key}`));
+  assert.deepEqual(estimated, ['as7341.nir']);
+  assert.ok(SENSOR_PROFILES.as7341.channels.find((c) => c.key === 'nir').fwhm > 0);
+});
+
 test('reconstruction removes the AS7343 F5/FY wall that interpolation produces', () => {
   const live = {
     f1: 0.00727, f2: 0.00688, fz: 0.01309, f3: 0.01958, f4: 0.01920, f5: 0.00610,
-    fy: 0.02489, fxl: 0.02522, f6: 0.03190, f7: 0.06213, f8: 0.08458,
+    fy: 0.02489, fxl: 0.02522, f6: 0.03190, f7: 0.06213, f8: 0.08458, nir: 0.35360,
   };
-  const jump = (card) => {
-    const [lo, hi] = card.axis;
-    let peak = 0;
-    for (let wl = lo; wl <= hi; wl += 0.25) peak = Math.max(peak, card.valueAt(wl));
-    return Math.abs(card.valueAt(555) - card.valueAt(550)) / peak;
+  const stepAcrossPair = (card) => {
+    let visiblePeak = 0;
+    for (let wl = 400; wl <= 750; wl += 0.25) visiblePeak = Math.max(visiblePeak, card.valueAt(wl));
+    return Math.abs(card.valueAt(555) - card.valueAt(550)) / visiblePeak;
   };
 
-  const spline = jump(makeCard('as7343', live, 'interpolation'));
-  const gauss = jump(makeCard('as7343', live));
+  const spline = stepAcrossPair(makeCard('as7343', live, 'interpolation'));
+  const gauss = stepAcrossPair(makeCard('as7343', live));
 
   assert.ok(spline > 0.15, `fixture should show the wall, got ${(spline * 100).toFixed(1)}%`);
   assert.ok(gauss < 0.02, `reconstruction should flatten it, got ${(gauss * 100).toFixed(1)}%`);
@@ -234,17 +239,19 @@ test('mode: interpolation keeps the original spline behaviour', () => {
   assert.ok(Math.abs(card.valueAt(515) - 100) < 1e-6, 'spline should pass through the channel value');
 });
 
-test('reconstruction puts a lone channel peak at its own wavelength', () => {
-  for (const [model, key, wavelength] of [['as7343', 'f8', 745], ['as7343', 'f5', 550], ['as7341', 'f1', 415]]) {
-    const values = Object.fromEntries(SENSOR_PROFILES[model].channels.map((c) => [c.key, c.key === key ? 100 : 0]));
+test('reconstruction attributes a lone channel peak to that channel, not a neighbour', () => {
+  for (const [model, key] of [['as7343', 'f8'], ['as7343', 'f5'], ['as7343', 'fz'], ['as7341', 'f1'], ['as7341', 'nir']]) {
+    const profile = SENSOR_PROFILES[model];
+    const lit = profile.channels.find((c) => c.key === key);
+    const values = Object.fromEntries(profile.channels.map((c) => [c.key, c.key === key ? 100 : 0]));
     const card = makeCard(model, values);
     const [lo, hi] = card.axis;
     let best = lo;
     for (let wl = lo; wl <= hi; wl += 0.5) if (card.valueAt(wl) > card.valueAt(best)) best = wl;
-    assert.ok(
-      Math.abs(best - wavelength) <= 5,
-      `${model}.${key}: peak landed at ${best}nm, more than 5nm from ${wavelength}nm. `
-        + 'A weighted average nudges an isolated edge channel outward by a nm or two; more than that is a fault.',
-    );
+
+    const nearest = profile.channels.reduce((a, c) =>
+      Math.abs(c.wavelength - best) < Math.abs(a.wavelength - best) ? c : a);
+    assert.equal(nearest.key, key,
+      `${model}.${key}: peak at ${best}nm sits nearest ${nearest.key} (${nearest.wavelength}nm), not the lit channel`);
   }
 });

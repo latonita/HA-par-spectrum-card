@@ -62,8 +62,8 @@ entities:
 | `full_scale` | number | `65535` | Highest count a channel can report, used for the saturation hint when no `saturation_level` entity is given. |
 | `mode` | string | `reconstruction` | `reconstruction` sums a Gaussian per channel; `interpolation` draws a spline through the channel readings. |
 
-`clear` and `nir` are read but not plotted, since neither has a single centre wavelength inside the visible
-range. They appear in the tooltip.
+`nir` is plotted like any other channel, so the curve does not stop dead at the last visible band. `clear` is
+read but not plotted, having no single centre wavelength; it appears in the tooltip.
 
 `saturation_level` is optional. When present the card uses it directly instead of guessing from `full_scale`.
 ESPHome's `as734x` platform can publish it.
@@ -89,6 +89,10 @@ differ by only 1.4x once width is accounted for, and the average blends them.
 
 Outside the outermost channels the curve tapers to zero at the axis edges, since nothing was measured there.
 
+Note that the y-axis is sensor response per nm, not spectral irradiance. Silicon is far more sensitive in the
+near infrared than the blue, and that is not corrected for, so `nir` usually towers over the visible bands even
+under light that is not especially rich in infrared.
+
 Set `mode: interpolation` for the original spline if you prefer it.
 
 ## Channels
@@ -100,7 +104,10 @@ The card only needs the channel keys; wavelengths and FWHM come from the built-i
 | Key | `f1` | `f2` | `f3` | `f4` | `f5` | `f6` | `f7` | `f8` | `nir` |
 |---|---|---|---|---|---|---|---|---|---|
 | nm | 415 | 445 | 480 | 515 | 555 | 590 | 630 | 680 | 910 |
-| FWHM | 26 | 30 | 36 | 39 | 39 | 40 | 50 | 52 | n/a |
+| FWHM | 26 | 30 | 36 | 39 | 39 | 40 | 50 | 52 | 60* |
+
+\* The AS7341 datasheet lists the NIR centre wavelength but gives its width as n/a, so 60nm is an estimate. It
+is marked `estimated: true` in the profile. Every other width here is from the datasheet.
 
 ### AS7343
 

@@ -1,7 +1,7 @@
 const SENSOR_PROFILES = {
   as7341: {
     label: 'AS7341',
-    axis: [380, 750],
+    axis: [380, 980],
     channels: [
       { key: 'f1', name: 'F1', wavelength: 415, fwhm: 26, color: '#8B00FF' },
       { key: 'f2', name: 'F2', wavelength: 445, fwhm: 30, color: '#4169E1' },
@@ -11,15 +11,15 @@ const SENSOR_PROFILES = {
       { key: 'f6', name: 'F6', wavelength: 590, fwhm: 40, color: '#FFD700' },
       { key: 'f7', name: 'F7', wavelength: 630, fwhm: 50, color: '#FF8C00' },
       { key: 'f8', name: 'F8', wavelength: 680, fwhm: 52, color: '#FF0000' },
+      { key: 'nir', name: 'NIR', wavelength: 910, fwhm: 60, estimated: true, color: '#8B0000' },
     ],
     aux: [
       { key: 'clear', name: 'Clear', color: '#CCCCCC' },
-      { key: 'nir', name: 'NIR', wavelength: 910, color: '#8B0000' },
     ],
   },
   as7343: {
     label: 'AS7343',
-    axis: [380, 790],
+    axis: [380, 930],
     channels: [
       { key: 'f1', name: 'F1', wavelength: 405, fwhm: 30, color: '#8B00FF' },
       { key: 'f2', name: 'F2', wavelength: 425, fwhm: 22, color: '#6A0DAD' },
@@ -32,10 +32,10 @@ const SENSOR_PROFILES = {
       { key: 'f6', name: 'F6', wavelength: 640, fwhm: 50, color: '#FF8C00' },
       { key: 'f7', name: 'F7', wavelength: 690, fwhm: 55, color: '#FF0000' },
       { key: 'f8', name: 'F8', wavelength: 745, fwhm: 60, color: '#B22222' },
+      { key: 'nir', name: 'NIR', wavelength: 855, fwhm: 54, color: '#8B0000' },
     ],
     aux: [
       { key: 'clear', name: 'Clear', color: '#CCCCCC' },
-      { key: 'nir', name: 'NIR', wavelength: 855, fwhm: 54, color: '#8B0000' },
     ],
   },
 };
@@ -490,7 +490,7 @@ class AS734xSpectrumCard extends HTMLElement {
     ctx.fillStyle = textColor;
     ctx.font = '10px sans-serif';
     ctx.textAlign = 'center';
-    const step = 50;
+    const step = axisMax - axisMin > 450 ? 100 : 50;
     for (let wl = Math.ceil(axisMin / step) * step; wl <= axisMax; wl += step) {
       ctx.fillText(`${wl}`, this.wavelengthToX(wl, chartWidth), height - 15);
     }
