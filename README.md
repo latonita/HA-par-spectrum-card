@@ -62,8 +62,10 @@ entities:
 | `full_scale` | number | `65535` | Highest count a channel can report, used for the saturation hint when no `saturation_level` entity is given. |
 | `mode` | string | `reconstruction` | `reconstruction` sums a Gaussian per channel; `interpolation` draws a spline through the channel readings. |
 
-`nir` is plotted like any other channel, so the curve does not stop dead at the last visible band. `clear` is
-read but not plotted, having no single centre wavelength; it appears in the tooltip.
+`clear` and `nir` are read but not plotted. `clear` has no single centre wavelength, and `nir` sits far outside
+the visible range with nothing between it and the last visible band, so folding it into the same normalised
+curve either squashes the visible detail or draws a spike across a gap the sensor never measured. Both appear in
+the tooltip.
 
 `saturation_level` is optional. When present the card uses it directly instead of guessing from `full_scale`.
 ESPHome's `as734x` platform can publish it.
@@ -89,15 +91,13 @@ differ by only 1.4x once width is accounted for, and the average blends them.
 
 The curve is also weighted by coverage, meaning how much kernel weight any channel actually contributes at that
 wavelength. Where channels sit close together the weighting saturates and has no effect; where they thin out it
-fades the curve toward zero. This is what stops the chart from bridging a gap no channel covers. On the AS7341,
-F8 sits at 680nm and NIR at 910nm, and around 787nm the total weight is 0.000: nothing measured that light, so
-the curve reads zero there instead of drawing a confident line between the two. It also removes the need for a
-separate edge taper, since coverage falls away past the outermost channel on its own.
+fades the curve toward zero. This is what stops the chart from bridging a gap no channel covers. It also handles the ends of the
+axis, since coverage falls away past the outermost channel on its own, and it is what would stop the chart from
+bridging a gap no channel covers if a profile ever had one.
 
 Note that the y-axis is sensor response per nm, not spectral irradiance. Silicon is far more sensitive in the
 near infrared than the blue, and that is not corrected for, so `nir` usually towers over the visible bands even
-under light that is not especially rich in infrared. If that squashes the visible detail you care about, leave
-`nir` out of `entities` and the chart scales to the visible channels alone.
+under light that is not especially rich in infrared. That is the main reason `nir` is kept out of the curve.
 
 Set `mode: interpolation` for the original spline if you prefer it.
 
@@ -110,10 +110,7 @@ The card only needs the channel keys; wavelengths and FWHM come from the built-i
 | Key | `f1` | `f2` | `f3` | `f4` | `f5` | `f6` | `f7` | `f8` | `nir` |
 |---|---|---|---|---|---|---|---|---|---|
 | nm | 415 | 445 | 480 | 515 | 555 | 590 | 630 | 680 | 910 |
-| FWHM | 26 | 30 | 36 | 39 | 39 | 40 | 50 | 52 | 60* |
-
-\* The AS7341 datasheet lists the NIR centre wavelength but gives its width as n/a, so 60nm is an estimate. It
-is marked `estimated: true` in the profile. Every other width here is from the datasheet.
+| FWHM | 26 | 30 | 36 | 39 | 39 | 40 | 50 | 52 | n/a |
 
 ### AS7343
 

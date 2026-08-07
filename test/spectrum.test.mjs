@@ -59,7 +59,7 @@ test('AS7343 channels sort into wavelength order despite config order', () => {
   assert.deepEqual(wavelengths, [...wavelengths].sort((a, b) => a - b));
   assert.deepEqual(
     sorted.map((ch) => ch.key),
-    ['f1', 'f2', 'fz', 'f3', 'f4', 'f5', 'fy', 'fxl', 'f6', 'f7', 'f8', 'nir'],
+    ['f1', 'f2', 'fz', 'f3', 'f4', 'f5', 'fy', 'fxl', 'f6', 'f7', 'f8'],
   );
 });
 
@@ -184,13 +184,6 @@ test('published FWHM values match the datasheet tables', () => {
   }
 });
 
-test('the only estimated width is AS7341 NIR, which the datasheet leaves as n/a', () => {
-  const estimated = Object.entries(SENSOR_PROFILES).flatMap(([model, p]) =>
-    p.channels.filter((c) => c.estimated).map((c) => `${model}.${c.key}`));
-  assert.deepEqual(estimated, ['as7341.nir']);
-  assert.ok(SENSOR_PROFILES.as7341.channels.find((c) => c.key === 'nir').fwhm > 0);
-});
-
 test('reconstruction removes the AS7343 F5/FY wall that interpolation produces', () => {
   const live = {
     f1: 0.00727, f2: 0.00688, fz: 0.01309, f3: 0.01958, f4: 0.01920, f5: 0.00610,
@@ -240,7 +233,7 @@ test('mode: interpolation keeps the original spline behaviour', () => {
 });
 
 test('reconstruction attributes a lone channel peak to that channel, not a neighbour', () => {
-  for (const [model, key] of [['as7343', 'f8'], ['as7343', 'f5'], ['as7343', 'fz'], ['as7341', 'f1'], ['as7341', 'nir']]) {
+  for (const [model, key] of [['as7343', 'f8'], ['as7343', 'f5'], ['as7343', 'fz'], ['as7341', 'f1']]) {
     const profile = SENSOR_PROFILES[model];
     const lit = profile.channels.find((c) => c.key === key);
     const values = Object.fromEntries(profile.channels.map((c) => [c.key, c.key === key ? 100 : 0]));
@@ -273,10 +266,18 @@ test('a flat spectrum reconstructs flat', () => {
   }
 });
 
-test('a wavelength range no channel covers reads zero rather than being bridged', () => {
-  const card = makeCard('as7341', { f8: 1, nir: 1 });
-  assert.ok(card.valueAt(787) < 0.01 * card.valueAt(910),
-    'the AS7341 gap between F8 and NIR has no coverage and must not be drawn as signal');
-  assert.ok(card.valueAt(680) > 0, 'F8 itself must still register');
-  assert.ok(card.valueAt(910) > 0, 'NIR itself must still register');
+test('coverage fades the curve out past the outermost channel', () => {
+  for (const model of Object.keys(SENSOR_PROFILES)) {
+    const profile = SENSOR_PROFILES[model];
+    const card = makeCard(model);
+    const channels = sortedChannels(profile);
+    const last = channels[channels.length - 1];
+    const first = channels[0];
+    const peak = card.valueAt(last.wavelength);
+
+    assert.ok(peak > 0, `${model}: the last channel must register`);
+    assert.ok(card.valueAt(card.axis[1]) < 0.01 * peak, `${model}: curve does not fade at the right edge`);
+    assert.ok(card.valueAt(card.axis[0]) < 0.01 * peak, `${model}: curve does not fade at the left edge`);
+    assert.ok(card.valueAt(first.wavelength) > 0, `${model}: the first channel must register`);
+  }
 });
