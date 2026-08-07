@@ -60,6 +60,7 @@ entities:
 | `title` | string | `<model> Light Spectrum` | Card heading. |
 | `axis` | `[min, max]` | per model | Wavelength range of the x-axis, in nm. |
 | `full_scale` | number | `65535` | Highest count a channel can report, used for the saturation hint when no `saturation_level` entity is given. |
+| `mode` | string | `reconstruction` | `reconstruction` sums a Gaussian per channel; `interpolation` draws a spline through the channel readings. |
 
 `clear` and `nir` are read but not plotted, since neither has a single centre wavelength inside the visible
 range. They appear in the tooltip.
@@ -67,21 +68,41 @@ range. They appear in the tooltip.
 `saturation_level` is optional. When present the card uses it directly instead of guessing from `full_scale`.
 ESPHome's `as734x` platform can publish it.
 
+## How the Curve Is Drawn
+
+A spectral sensor is not a set of point samples. Each channel is a band-pass filter with its own width, so a
+wide channel collects more light than a narrow one looking at the same spectrum. Joining the readings with a
+line treats them as if they measured the same thing, which is wrong wherever the widths differ.
+
+The default `reconstruction` mode instead gives every channel a Gaussian centred on its wavelength, as wide as
+its FWHM, with an area equal to its reading. Adding those together produces spectral density, counts per nm.
+Wide channels spread their counts out and sit lower, narrow channels sit higher, and the result is smooth by
+construction.
+
+This matters most on the AS7343, where `f5` (550nm, 35nm wide) and `fy` (555nm, 100nm wide) are 5nm apart. Drawn
+as a spline the pair can produce a near-vertical wall that is mostly a bandwidth artefact. Reconstruction
+removes it: on a real reading the step across that pair falls from about 22% of the chart height to under 1%,
+and the F5/FY ratio drops from 4.1x to 1.4x once bandwidth is accounted for.
+
+Set `mode: interpolation` for the original spline if you prefer it.
+
 ## Channels
 
-The card only needs the channel keys; wavelengths come from the built-in profile.
+The card only needs the channel keys; wavelengths and FWHM come from the built-in profile.
 
 ### AS7341
 
 | Key | `f1` | `f2` | `f3` | `f4` | `f5` | `f6` | `f7` | `f8` | `nir` |
 |---|---|---|---|---|---|---|---|---|---|
 | nm | 415 | 445 | 480 | 515 | 555 | 590 | 630 | 680 | 910 |
+| FWHM | 26 | 30 | 36 | 39 | 39 | 40 | 50 | 52 | n/a |
 
 ### AS7343
 
 | Key | `f1` | `f2` | `fz` | `f3` | `f4` | `f5` | `fy` | `fxl` | `f6` | `f7` | `f8` | `nir` |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | nm | 405 | 425 | 450 | 475 | 515 | 550 | 555 | 600 | 640 | 690 | 745 | 855 |
+| FWHM | 30 | 22 | 55 | 30 | 40 | 35 | 100 | 80 | 50 | 55 | 60 | 54 |
 
 > The AS7343 is not an AS7341 with extra channels. The two sensors carry different filter sets, so the same key
 > means a different wavelength on each. Note also that `f5` (550nm) sits **below** `fy` (555nm) even though
@@ -139,7 +160,7 @@ as7999: {
   label: 'AS7999',
   axis: [350, 800],
   channels: [
-    { key: 'a1', name: 'A1', wavelength: 360, color: '#8B00FF' },
+    { key: 'a1', name: 'A1', wavelength: 360, fwhm: 25, color: '#8B00FF' },
   ],
   aux: [
     { key: 'clear', name: 'Clear', color: '#CCCCCC' },
@@ -148,7 +169,8 @@ as7999: {
 ```
 
 Sorting, axis range, curve endpoints, tick labels, tooltips and the stub config all derive from that entry.
-Channels may be listed in any order.
+Channels may be listed in any order. `fwhm` comes from the sensor datasheet and is what reconstruction needs; a
+profile whose channels lack it falls back to interpolation automatically.
 
 ## Development
 
@@ -160,7 +182,7 @@ npm run build
 ## Credits
 
 Original card by [goatboynz](https://github.com/goatboynz). AS7343 support and the profile-driven rework in this
-fork.
+fork. Channel wavelengths and FWHM are from the ams-osram AS7341 (DS000504) and AS7343 (DS001046) datasheets.
 
 ## License
 

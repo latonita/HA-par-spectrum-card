@@ -3,14 +3,14 @@ const SENSOR_PROFILES = {
     label: 'AS7341',
     axis: [380, 750],
     channels: [
-      { key: 'f1', name: 'F1', wavelength: 415, color: '#8B00FF' },
-      { key: 'f2', name: 'F2', wavelength: 445, color: '#4169E1' },
-      { key: 'f3', name: 'F3', wavelength: 480, color: '#00BFFF' },
-      { key: 'f4', name: 'F4', wavelength: 515, color: '#00FF00' },
-      { key: 'f5', name: 'F5', wavelength: 555, color: '#9ACD32' },
-      { key: 'f6', name: 'F6', wavelength: 590, color: '#FFD700' },
-      { key: 'f7', name: 'F7', wavelength: 630, color: '#FF8C00' },
-      { key: 'f8', name: 'F8', wavelength: 680, color: '#FF0000' },
+      { key: 'f1', name: 'F1', wavelength: 415, fwhm: 26, color: '#8B00FF' },
+      { key: 'f2', name: 'F2', wavelength: 445, fwhm: 30, color: '#4169E1' },
+      { key: 'f3', name: 'F3', wavelength: 480, fwhm: 36, color: '#00BFFF' },
+      { key: 'f4', name: 'F4', wavelength: 515, fwhm: 39, color: '#00FF00' },
+      { key: 'f5', name: 'F5', wavelength: 555, fwhm: 39, color: '#9ACD32' },
+      { key: 'f6', name: 'F6', wavelength: 590, fwhm: 40, color: '#FFD700' },
+      { key: 'f7', name: 'F7', wavelength: 630, fwhm: 50, color: '#FF8C00' },
+      { key: 'f8', name: 'F8', wavelength: 680, fwhm: 52, color: '#FF0000' },
     ],
     aux: [
       { key: 'clear', name: 'Clear', color: '#CCCCCC' },
@@ -21,21 +21,21 @@ const SENSOR_PROFILES = {
     label: 'AS7343',
     axis: [380, 790],
     channels: [
-      { key: 'f1', name: 'F1', wavelength: 405, color: '#8B00FF' },
-      { key: 'f2', name: 'F2', wavelength: 425, color: '#6A0DAD' },
-      { key: 'fz', name: 'FZ', wavelength: 450, color: '#4169E1' },
-      { key: 'f3', name: 'F3', wavelength: 475, color: '#00BFFF' },
-      { key: 'f4', name: 'F4', wavelength: 515, color: '#00FF00' },
-      { key: 'f5', name: 'F5', wavelength: 550, color: '#7CFC00' },
-      { key: 'fy', name: 'FY', wavelength: 555, color: '#9ACD32' },
-      { key: 'fxl', name: 'FXL', wavelength: 600, color: '#FFD700' },
-      { key: 'f6', name: 'F6', wavelength: 640, color: '#FF8C00' },
-      { key: 'f7', name: 'F7', wavelength: 690, color: '#FF0000' },
-      { key: 'f8', name: 'F8', wavelength: 745, color: '#B22222' },
+      { key: 'f1', name: 'F1', wavelength: 405, fwhm: 30, color: '#8B00FF' },
+      { key: 'f2', name: 'F2', wavelength: 425, fwhm: 22, color: '#6A0DAD' },
+      { key: 'fz', name: 'FZ', wavelength: 450, fwhm: 55, color: '#4169E1' },
+      { key: 'f3', name: 'F3', wavelength: 475, fwhm: 30, color: '#00BFFF' },
+      { key: 'f4', name: 'F4', wavelength: 515, fwhm: 40, color: '#00FF00' },
+      { key: 'f5', name: 'F5', wavelength: 550, fwhm: 35, color: '#7CFC00' },
+      { key: 'fy', name: 'FY', wavelength: 555, fwhm: 100, color: '#9ACD32' },
+      { key: 'fxl', name: 'FXL', wavelength: 600, fwhm: 80, color: '#FFD700' },
+      { key: 'f6', name: 'F6', wavelength: 640, fwhm: 50, color: '#FF8C00' },
+      { key: 'f7', name: 'F7', wavelength: 690, fwhm: 55, color: '#FF0000' },
+      { key: 'f8', name: 'F8', wavelength: 745, fwhm: 60, color: '#B22222' },
     ],
     aux: [
       { key: 'clear', name: 'Clear', color: '#CCCCCC' },
-      { key: 'nir', name: 'NIR', wavelength: 855, color: '#8B0000' },
+      { key: 'nir', name: 'NIR', wavelength: 855, fwhm: 54, color: '#8B0000' },
     ],
   },
 };
@@ -113,6 +113,23 @@ function catmullRom(points, x) {
   );
 }
 
+const FWHM_TO_SIGMA = 1 / (2 * Math.sqrt(2 * Math.LN2));
+const SQRT_TWO_PI = Math.sqrt(2 * Math.PI);
+
+function spectralDensity(channels, x) {
+  let sum = 0;
+  for (const ch of channels) {
+    const sigma = ch.fwhm * FWHM_TO_SIGMA;
+    const offset = x - ch.wavelength;
+    sum += (ch.value / (sigma * SQRT_TWO_PI)) * Math.exp(-(offset * offset) / (2 * sigma * sigma));
+  }
+  return sum;
+}
+
+function canReconstruct(channels) {
+  return channels.length > 0 && channels.every((ch) => ch.fwhm > 0);
+}
+
 class AS734xSpectrumCard extends HTMLElement {
   constructor() {
     super();
@@ -129,6 +146,7 @@ class AS734xSpectrumCard extends HTMLElement {
     this._channels = [];
     this._aux = [];
     this._curve = [];
+    this._reconstruct = false;
     this.render();
   }
 
@@ -246,6 +264,7 @@ class AS734xSpectrumCard extends HTMLElement {
     this._channels = this.readChannels();
     this._aux = this.readAux();
     this._curve = this.buildCurve();
+    this._reconstruct = this._config.mode !== 'interpolation' && canReconstruct(this._channels);
     this.updateBanner();
     this.draw();
   }
@@ -329,7 +348,21 @@ class AS734xSpectrumCard extends HTMLElement {
   }
 
   valueAt(wavelength) {
-    return catmullRom(this._curve, wavelength);
+    return this._reconstruct ? spectralDensity(this._channels, wavelength) : catmullRom(this._curve, wavelength);
+  }
+
+  sampleCurve(chartWidth, chartHeight) {
+    const [axisMin, axisMax] = this.axis;
+    const samples = [];
+    for (let i = 0; i <= CURVE_RESOLUTION; i++) {
+      const wavelength = axisMin + (i / CURVE_RESOLUTION) * (axisMax - axisMin);
+      samples.push({ wavelength, value: Math.max(0, this.valueAt(wavelength)) });
+    }
+    const peak = Math.max(...samples.map((s) => s.value), Number.MIN_VALUE);
+    return samples.map((s) => ({
+      x: this.wavelengthToX(s.wavelength, chartWidth),
+      y: CHART_PADDING + chartHeight - (s.value / peak) * chartHeight,
+    }));
   }
 
   wavelengthToX(wavelength, chartWidth) {
@@ -411,16 +444,7 @@ class AS734xSpectrumCard extends HTMLElement {
 
     ctx.clearRect(0, 0, width, height);
 
-    const peak = Math.max(...this._channels.map((ch) => ch.value), 1);
-    const curve = [];
-    for (let i = 0; i <= CURVE_RESOLUTION; i++) {
-      const wavelength = axisMin + (i / CURVE_RESOLUTION) * (axisMax - axisMin);
-      const value = Math.max(0, catmullRom(this._curve, wavelength));
-      curve.push({
-        x: this.wavelengthToX(wavelength, chartWidth),
-        y: CHART_PADDING + chartHeight - (value / peak) * chartHeight,
-      });
-    }
+    const curve = this.sampleCurve(chartWidth, chartHeight);
 
     this.fillBand(ctx, chartWidth, chartHeight, 0.12);
 

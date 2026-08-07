@@ -13,11 +13,11 @@ const {
   AS734xSpectrumCard,
 } = await import('../as734x-spectrum-card.js');
 
-function makeCard(model, channelValues) {
+function makeCard(model, channelValues, mode) {
   const profile = SENSOR_PROFILES[model];
   const card = Object.create(AS734xSpectrumCard.prototype);
   card._profile = profile;
-  card._config = { entities: {} };
+  card._config = { entities: {}, ...(mode ? { mode } : {}) };
   card._channels = sortedChannels(profile).map((ch) => ({
     ...ch,
     value: channelValues ? channelValues[ch.key] ?? 1 : 1,
@@ -25,7 +25,19 @@ function makeCard(model, channelValues) {
     available: true,
   }));
   card._curve = card.buildCurve();
+  card._reconstruct = mode !== 'interpolation';
   return card;
+}
+
+function steepestStep(card, step = 0.5) {
+  const [lo, hi] = card.axis;
+  let peak = 0;
+  for (let wl = lo; wl <= hi; wl += step) peak = Math.max(peak, card.valueAt(wl));
+  let worst = 0;
+  for (let wl = lo; wl + step <= hi; wl += step) {
+    worst = Math.max(worst, Math.abs(card.valueAt(wl + step) - card.valueAt(wl)) / peak);
+  }
+  return worst;
 }
 
 test('every profile lists channels the card can sort unambiguously', () => {
@@ -83,7 +95,7 @@ test('curve spans the axis and keeps the last channel inside it', () => {
 });
 
 test('interpolation reproduces channel peaks and stays finite across the axis', () => {
-  const card = makeCard('as7343', { f4: 100 });
+  const card = makeCard('as7343', { f4: 100 }, 'interpolation');
   const [axisMin, axisMax] = card.axis;
 
   assert.ok(Math.abs(card.valueAt(515) - 100) < 1e-6, 'value at F4 should be its own reading');
@@ -94,7 +106,7 @@ test('interpolation reproduces channel peaks and stays finite across the axis', 
 });
 
 test('a peak at the longest AS7343 channel is not swallowed by the tail', () => {
-  const card = makeCard('as7343', { f8: 100 });
+  const card = makeCard('as7343', { f8: 100 }, 'interpolation');
   assert.ok(Math.abs(card.valueAt(745) - 100) < 1e-6, `F8 peak lost: got ${card.valueAt(745)}`);
 });
 
@@ -153,4 +165,82 @@ test('an empty channel set degrades quietly', () => {
   assert.deepEqual(card._curve, []);
   assert.equal(card.valueAt(500), 0);
   assert.match(card.statusMessage().text, /No spectral entities/);
+});
+
+test('every plotted channel carries a positive FWHM', () => {
+  for (const [name, profile] of Object.entries(SENSOR_PROFILES)) {
+    for (const ch of profile.channels) {
+      assert.ok(ch.fwhm > 0, `${name}.${ch.key} has no FWHM`);
+    }
+  }
+});
+
+test('FWHM values match the datasheet tables', () => {
+  const as7341 = { f1: 26, f2: 30, f3: 36, f4: 39, f5: 39, f6: 40, f7: 50, f8: 52 };
+  const as7343 = { f1: 30, f2: 22, fz: 55, f3: 30, f4: 40, f5: 35, fy: 100, fxl: 80, f6: 50, f7: 55, f8: 60 };
+  for (const [model, table] of [['as7341', as7341], ['as7343', as7343]]) {
+    for (const ch of SENSOR_PROFILES[model].channels) {
+      assert.equal(ch.fwhm, table[ch.key], `${model}.${ch.key} FWHM`);
+    }
+  }
+});
+
+test('reconstruction removes the AS7343 F5/FY wall that interpolation produces', () => {
+  const live = {
+    f1: 0.00727, f2: 0.00688, fz: 0.01309, f3: 0.01958, f4: 0.01920, f5: 0.00610,
+    fy: 0.02489, fxl: 0.02522, f6: 0.03190, f7: 0.06213, f8: 0.08458,
+  };
+  const jump = (card) => {
+    const [lo, hi] = card.axis;
+    let peak = 0;
+    for (let wl = lo; wl <= hi; wl += 0.25) peak = Math.max(peak, card.valueAt(wl));
+    return Math.abs(card.valueAt(555) - card.valueAt(550)) / peak;
+  };
+
+  const spline = jump(makeCard('as7343', live, 'interpolation'));
+  const gauss = jump(makeCard('as7343', live));
+
+  assert.ok(spline > 0.15, `fixture should show the wall, got ${(spline * 100).toFixed(1)}%`);
+  assert.ok(gauss < 0.02, `reconstruction should flatten it, got ${(gauss * 100).toFixed(1)}%`);
+});
+
+test('reconstruction never goes negative and stays smooth', () => {
+  for (const model of Object.keys(SENSOR_PROFILES)) {
+    const card = makeCard(model, { f4: 100 });
+    const [lo, hi] = card.axis;
+    for (let wl = lo; wl <= hi; wl += 0.5) {
+      assert.ok(card.valueAt(wl) >= 0, `${model}: negative at ${wl}nm`);
+    }
+    assert.ok(steepestStep(card) < 0.05, `${model}: curve has a step steeper than 5% of height`);
+  }
+});
+
+test('a lone narrow channel does not out-peak a wide one carrying the same counts', () => {
+  const narrow = makeCard('as7343', Object.fromEntries(
+    SENSOR_PROFILES.as7343.channels.map((c) => [c.key, c.key === 'f5' ? 1 : 0]),
+  ));
+  const wide = makeCard('as7343', Object.fromEntries(
+    SENSOR_PROFILES.as7343.channels.map((c) => [c.key, c.key === 'fy' ? 1 : 0]),
+  ));
+  assert.ok(
+    narrow.valueAt(550) > wide.valueAt(555),
+    'equal counts through a narrower filter must mean a higher spectral density',
+  );
+});
+
+test('mode: interpolation keeps the original spline behaviour', () => {
+  const card = makeCard('as7343', { f4: 100 }, 'interpolation');
+  assert.equal(card._reconstruct, false);
+  assert.ok(Math.abs(card.valueAt(515) - 100) < 1e-6, 'spline should pass through the channel value');
+});
+
+test('reconstruction puts a lone channel peak at its own wavelength', () => {
+  for (const [model, key, wavelength] of [['as7343', 'f8', 745], ['as7343', 'f5', 550], ['as7341', 'f1', 415]]) {
+    const values = Object.fromEntries(SENSOR_PROFILES[model].channels.map((c) => [c.key, c.key === key ? 100 : 0]));
+    const card = makeCard(model, values);
+    const [lo, hi] = card.axis;
+    let best = lo;
+    for (let wl = lo; wl <= hi; wl += 0.5) if (card.valueAt(wl) > card.valueAt(best)) best = wl;
+    assert.ok(Math.abs(best - wavelength) <= 1, `${model}.${key}: peak landed at ${best}nm, expected ${wavelength}nm`);
+  }
 });
