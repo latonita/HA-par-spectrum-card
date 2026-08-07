@@ -87,11 +87,17 @@ This also settles the AS7343 `f5`/`fy` pair, 5nm apart at 35nm and 100nm wide. D
 near vertical wall, about 22% of the chart height, which is mostly a bandwidth artefact; the two densities
 differ by only 1.4x once width is accounted for, and the average blends them.
 
-Outside the outermost channels the curve tapers to zero at the axis edges, since nothing was measured there.
+The curve is also weighted by coverage, meaning how much kernel weight any channel actually contributes at that
+wavelength. Where channels sit close together the weighting saturates and has no effect; where they thin out it
+fades the curve toward zero. This is what stops the chart from bridging a gap no channel covers. On the AS7341,
+F8 sits at 680nm and NIR at 910nm, and around 787nm the total weight is 0.000: nothing measured that light, so
+the curve reads zero there instead of drawing a confident line between the two. It also removes the need for a
+separate edge taper, since coverage falls away past the outermost channel on its own.
 
 Note that the y-axis is sensor response per nm, not spectral irradiance. Silicon is far more sensitive in the
 near infrared than the blue, and that is not corrected for, so `nir` usually towers over the visible bands even
-under light that is not especially rich in infrared.
+under light that is not especially rich in infrared. If that squashes the visible detail you care about, leave
+`nir` out of `entities` and the chart scales to the visible channels alone.
 
 Set `mode: interpolation` for the original spline if you prefer it.
 

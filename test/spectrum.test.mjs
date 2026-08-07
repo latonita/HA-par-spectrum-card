@@ -255,3 +255,28 @@ test('reconstruction attributes a lone channel peak to that channel, not a neigh
       `${model}.${key}: peak at ${best}nm sits nearest ${nearest.key} (${nearest.wavelength}nm), not the lit channel`);
   }
 });
+
+test('a flat spectrum reconstructs flat', () => {
+  for (const model of Object.keys(SENSOR_PROFILES)) {
+    const profile = SENSOR_PROFILES[model];
+    const card = makeCard(model, Object.fromEntries(profile.channels.map((c) => [c.key, c.fwhm])));
+    const visible = sortedChannels(profile).filter((c) => c.key !== 'nir');
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (let wl = visible[0].wavelength; wl <= visible[visible.length - 1].wavelength; wl += 0.5) {
+      const v = card.valueAt(wl);
+      lo = Math.min(lo, v);
+      hi = Math.max(hi, v);
+    }
+    const ripple = (hi - lo) / ((hi + lo) / 2);
+    assert.ok(ripple < 0.01, `${model}: flat input rippled ${(ripple * 100).toFixed(1)}%, so the curve invents structure`);
+  }
+});
+
+test('a wavelength range no channel covers reads zero rather than being bridged', () => {
+  const card = makeCard('as7341', { f8: 1, nir: 1 });
+  assert.ok(card.valueAt(787) < 0.01 * card.valueAt(910),
+    'the AS7341 gap between F8 and NIR has no coverage and must not be drawn as signal');
+  assert.ok(card.valueAt(680) > 0, 'F8 itself must still register');
+  assert.ok(card.valueAt(910) > 0, 'NIR itself must still register');
+});
