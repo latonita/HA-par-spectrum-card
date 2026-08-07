@@ -5,10 +5,26 @@ A Home Assistant Lovelace card that plots the output of a multi-channel spectral
 Supports the **AS7341** (8 plotted bands) and the **AS7343** (11 plotted bands). Adding another sensor means adding
 one entry to a table, not touching the drawing code.
 
-![Screenshot](Screenshot%202025-11-10%20183434.png)
+![AS7341 and AS7343 under a 3000K LED bulb](as734x-led-bulb-3000K.png)
+
+Both sensors under a 3000K LED bulb, reconstruction above and raw basic counts below.
 
 This is a fork of [goatboynz/HA-par-spectrum-card](https://github.com/goatboynz/HA-par-spectrum-card), which
 supports the AS7341 only.
+
+## Examples
+
+A warm white LED is a blue pump behind a phosphor, and the reconstruction resolves that: a narrow spike at
+450nm from the pump, a dip around 480nm, then the broad phosphor hump peaking near 600nm. The raw counts only
+hint at the blue spike, because no single channel is narrow enough to isolate it.
+
+Halogen is a blackbody instead, so there is no structure to resolve, just a smooth climb into the infrared:
+
+![AS7341 and AS7343 under a halogen lamp](as734x-halogen-lamp.png)
+
+Fitting a Planck curve to these halogen reconstructions gives 3300 K for the AS7341 and 2945 K for the AS7343,
+against 3307 K and 2931 K from the component's own colour temperature sensor. Those are independent
+calculations, agreeing to within 15 K.
 
 ## Installation
 
