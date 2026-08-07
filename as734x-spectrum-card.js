@@ -208,6 +208,17 @@ class AS734xSpectrumCard extends HTMLElement {
     return out;
   }
 
+  reconstructionUndershoot() {
+    if (!this._spectrum || this._spectrum.length === 0) return 0;
+    let peak = 0;
+    let lowest = 0;
+    for (const point of this._spectrum) {
+      if (point.value > peak) peak = point.value;
+      if (point.value < lowest) lowest = point.value;
+    }
+    return peak > 0 ? -lowest / peak : 0;
+  }
+
   missingForReconstruction() {
     if (!this._basis) return [];
     return this._basis.keys.filter((key) => !this._config.entities[key]);
@@ -354,6 +365,14 @@ class AS734xSpectrumCard extends HTMLElement {
     const missing = this.missingForReconstruction();
     if (missing.length > 0) {
       return { level: 'warning', text: `Reconstruction needs every channel. Missing: ${missing.join(', ')}.` };
+    }
+    const undershoot = this.reconstructionUndershoot();
+    if (undershoot > 0.05) {
+      return {
+        level: 'warning',
+        text: `Reconstruction went ${Math.round(undershoot * 100)}% below zero, so the shape is unreliable. `
+          + 'This usually means a channel is saturated or the light has structure this sensor cannot resolve.',
+      };
     }
     const values = this._channels.map((ch) => ch.value);
     if (values.length === 0) {

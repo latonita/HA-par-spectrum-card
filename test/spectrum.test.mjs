@@ -227,3 +227,16 @@ test('an unknown model has no basis and is rejected up front', () => {
     card.setConfig({ model: 'as7999', mode: 'reconstruction', entities: { f1: 'sensor.f1' } });
   }, /Unknown model/);
 });
+
+test('reconstruction warns when the result dips well below zero', () => {
+  const basis = SPECTRAL_BASIS.as7341;
+  const clean = makeReconstructionCard('as7341', Object.fromEntries(basis.keys.map((k) => [k, 1])));
+  assert.ok(clean.reconstructionUndershoot() >= 0);
+
+  const skewed = makeReconstructionCard('as7341',
+    Object.fromEntries(basis.keys.map((k) => [k, k === 'clear' ? 0.01 : 20])));
+  assert.ok(skewed.reconstructionUndershoot() > 0.05,
+    `expected a large negative excursion, got ${skewed.reconstructionUndershoot()}`);
+  assert.equal(skewed.statusMessage().level, 'warning');
+  assert.match(skewed.statusMessage().text, /below zero/);
+});
