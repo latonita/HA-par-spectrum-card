@@ -100,7 +100,8 @@ some channels contribute negatively. The output spans 380 to 1000nm, so `nir` si
 towering over the visible bands.
 
 Every channel in the basis must be mapped, `clear` and `nir` included, or the card says which are missing and
-the result is wrong. The AS7343 basis leaves `f5` at zero throughout, matching the ESPHome driver, which treats
+the result is wrong. The reconstruction is a fit over ten or thirteen channels, not a measurement, so it can
+dip below zero where the fit is poorly constrained; the card mentions it rather than treating it as a fault. The AS7343 basis leaves `f5` at zero throughout, matching the ESPHome driver, which treats
 it as redundant with the wider `fy`.
 
 The workbook is 1nm; the embedded copy is resampled to 5nm at four significant figures, which costs under 0.3%

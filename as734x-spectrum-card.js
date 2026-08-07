@@ -428,9 +428,8 @@ class AS734xSpectrumCard extends HTMLElement {
     const undershoot = this.reconstructionUndershoot();
     if (undershoot > 0.05) {
       return {
-        level: 'warning',
-        text: `Reconstruction went ${Math.round(undershoot * 100)}% below zero, so the shape is unreliable. `
-          + 'This usually means a channel is saturated or the light has structure this sensor cannot resolve.',
+        level: 'info',
+        text: `Reconstruction is approximate; it dipped ${Math.round(undershoot * 100)}% below zero here.`,
       };
     }
     const values = this._channels.map((ch) => ch.value);
