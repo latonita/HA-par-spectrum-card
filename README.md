@@ -58,7 +58,7 @@ entities:
 | `entities` | map | **required** | Channel key to entity id. Every key is optional; only what you list is drawn. |
 | `model` | string | auto | `as7341` or `as7343`. Detected from the channel keys when omitted. |
 | `title` | string | `<model> Light Spectrum` | Card heading. |
-| `axis` | `[min, max]` | per model | Wavelength range of the x-axis, in nm. |
+| `axis` | `[min, max]` or `{min, max}` | per model | Wavelength range of the x-axis, in nm. Either bound may be given on its own; the other keeps its default. |
 | `mode` | string | plain spline | Set to `reconstruction` to rebuild the spectrum from the vendor basis. |
 | `full_scale` | number | `65535` | Highest count a channel can report, used for the saturation hint when no `saturation_level` entity is given. |
 
@@ -109,6 +109,20 @@ of peak and about seven eighths of the size. Regenerate it with:
 ```bash
 python3 script/extract-basis.py as734x-golden.xlsx
 ```
+
+### Axis Range
+
+The default range comes from the sensor profile, or from the basis range in reconstruction mode. Override it
+with a pair or with named bounds:
+
+```yaml
+axis: [380, 800]      # both bounds
+axis: { max: 800 }    # trim the infrared tail, keep the default 380 start
+axis: { min: 400 }    # keep the default upper bound
+```
+
+The card refuses a range that does not increase, and it says so when the card is configured rather than
+silently drawing nothing.
 
 ## Colour
 

@@ -104,6 +104,17 @@ function resolveProfileName(config) {
   return match ? match[0] : DEFAULT_PROFILE;
 }
 
+function resolveAxis(override, fallback) {
+  if (override === undefined || override === null) return fallback;
+  const [min, max] = Array.isArray(override) ? [override[0], override[1]] : [override.min, override.max];
+  const low = Number.isFinite(min) ? min : fallback[0];
+  const high = Number.isFinite(max) ? max : fallback[1];
+  if (!(high > low)) {
+    throw new Error(`axis max (${high}) must be greater than axis min (${low})`);
+  }
+  return [low, high];
+}
+
 function sortedChannels(profile) {
   return [...profile.channels].sort((a, b) => a.wavelength - b.wavelength);
 }
@@ -230,6 +241,7 @@ class AS734xSpectrumCard extends HTMLElement {
     this._aux = [];
     this._curve = [];
     this._spectrum = null;
+    this.axis;
     this.render();
   }
 
@@ -239,9 +251,10 @@ class AS734xSpectrumCard extends HTMLElement {
   }
 
   get axis() {
-    if (this._config.axis) return this._config.axis;
-    if (this._basis) return [this._basis.from, this._basis.from + (this._basis.count - 1) * this._basis.step];
-    return this._profile.axis;
+    const fallback = this._basis
+      ? [this._basis.from, this._basis.from + (this._basis.count - 1) * this._basis.step]
+      : this._profile.axis;
+    return resolveAxis(this._config.axis, fallback);
   }
 
   readings() {
@@ -655,4 +668,4 @@ window.customCards.push({
   description: 'Spectrum chart for AS7341 and AS7343 spectral sensors',
 });
 
-export { wavelengthRgb, SPECTRAL_BASIS, SENSOR_PROFILES, resolveProfileName, sortedChannels, catmullRom, AS734xSpectrumCard };
+export { resolveAxis, wavelengthRgb, SPECTRAL_BASIS, SENSOR_PROFILES, resolveProfileName, sortedChannels, catmullRom, AS734xSpectrumCard };

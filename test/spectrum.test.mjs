@@ -6,6 +6,7 @@ globalThis.customElements = { define() {} };
 globalThis.window = { customCards: [] };
 
 const {
+  resolveAxis,
   wavelengthRgb,
   SPECTRAL_BASIS,
   SENSOR_PROFILES,
@@ -279,4 +280,36 @@ test('wavelengths outside the visible range are rendered dark', () => {
   assert.ok(brightness(1000) < peak * 0.2, `1000nm should be very dark, got ${brightness(1000)}`);
   assert.ok(brightness(360) < peak * 0.3, `360nm should be dark, got ${brightness(360)}`);
   assert.ok(brightness(1000) > 0, 'the infrared tail should stay visible, not go pure black');
+});
+
+test('axis accepts a pair, an object, or one bound on its own', () => {
+  const fallback = [380, 750];
+  assert.deepEqual(resolveAxis(undefined, fallback), [380, 750]);
+  assert.deepEqual(resolveAxis([400, 800], fallback), [400, 800]);
+  assert.deepEqual(resolveAxis({ min: 400, max: 800 }, fallback), [400, 800]);
+  assert.deepEqual(resolveAxis({ min: 400 }, fallback), [400, 750], 'max falls back');
+  assert.deepEqual(resolveAxis({ max: 900 }, fallback), [380, 900], 'min falls back');
+  assert.deepEqual(resolveAxis({}, fallback), [380, 750]);
+});
+
+test('an axis that does not increase is rejected', () => {
+  assert.throws(() => resolveAxis([700, 700], [380, 750]), /must be greater/);
+  assert.throws(() => resolveAxis([900, 400], [380, 750]), /must be greater/);
+  assert.throws(() => resolveAxis({ min: 800 }, [380, 750]), /must be greater/);
+});
+
+test('a bad axis is caught when the card is configured, not when it draws', () => {
+  const card = Object.create(AS734xSpectrumCard.prototype);
+  card.render = () => {};
+  assert.throws(
+    () => card.setConfig({ model: 'as7341', entities: { f1: 'sensor.f1' }, axis: [800, 400] }),
+    /must be greater/,
+  );
+});
+
+test('the axis override also applies in reconstruction mode', () => {
+  const card = makeReconstructionCard('as7343', { f1: 1 });
+  assert.deepEqual(card.axis, [380, 1000]);
+  card._config.axis = { max: 780 };
+  assert.deepEqual(card.axis, [380, 780], 'basis range is the fallback, not a floor');
 });
