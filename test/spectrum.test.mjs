@@ -6,6 +6,7 @@ globalThis.customElements = { define() {} };
 globalThis.window = { customCards: [] };
 
 const {
+  wavelengthRgb,
   SPECTRAL_BASIS,
   SENSOR_PROFILES,
   resolveProfileName,
@@ -239,4 +240,43 @@ test('reconstruction warns when the result dips well below zero', () => {
     `expected a large negative excursion, got ${skewed.reconstructionUndershoot()}`);
   assert.equal(skewed.statusMessage().level, 'warning');
   assert.match(skewed.statusMessage().text, /below zero/);
+});
+
+test('gradient colour follows wavelength, not chart position', () => {
+  const hue = (nm) => {
+    const [r, g, b] = wavelengthRgb(nm);
+    if (r > g && r > b) return 'red';
+    if (g >= r && g > b) return 'green';
+    return 'blue';
+  };
+  assert.equal(hue(400), 'blue', 'violet end');
+  assert.equal(hue(450), 'blue');
+  assert.equal(hue(520), 'green');
+  assert.equal(hue(580), 'green', 'yellow reads as red+green');
+  assert.equal(hue(660), 'red');
+  assert.equal(hue(700), 'red');
+
+  const [r580, g580] = wavelengthRgb(580);
+  assert.ok(r580 === 255 && g580 === 255, `580nm should be yellow, got ${wavelengthRgb(580)}`);
+});
+
+test('red arrives in the visible red band, not out in the infrared', () => {
+  let firstFullRed = null;
+  for (let nm = 380; nm <= 1000; nm += 1) {
+    const [r, g, b] = wavelengthRgb(nm);
+    if (firstFullRed === null && r === 255 && g === 0 && b === 0) firstFullRed = nm;
+  }
+  assert.ok(firstFullRed >= 620 && firstFullRed <= 700,
+    `pure red should start between 620 and 700nm, got ${firstFullRed}nm`);
+});
+
+test('wavelengths outside the visible range are rendered dark', () => {
+  const brightness = (nm) => Math.max(...wavelengthRgb(nm));
+  const peak = brightness(550);
+  assert.equal(peak, 255);
+  assert.ok(brightness(780) < peak * 0.4, `780nm should be dim, got ${brightness(780)}`);
+  assert.ok(brightness(900) < peak * 0.3, `900nm should be dark, got ${brightness(900)}`);
+  assert.ok(brightness(1000) < peak * 0.2, `1000nm should be very dark, got ${brightness(1000)}`);
+  assert.ok(brightness(360) < peak * 0.3, `360nm should be dark, got ${brightness(360)}`);
+  assert.ok(brightness(1000) > 0, 'the infrared tail should stay visible, not go pure black');
 });

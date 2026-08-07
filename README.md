@@ -110,6 +110,16 @@ of peak and about seven eighths of the size. Regenerate it with:
 python3 script/extract-basis.py as734x-golden.xlsx
 ```
 
+## Colour
+
+The background and fill gradients are keyed to wavelength, not to position on the chart, so they stay correct
+whatever range the axis covers. Pure red lands at 645nm and holds to 700nm, yellow at 580nm, green at 510nm,
+blue at 440nm.
+
+Outside the visible range the colour keeps its hue but darkens sharply: about a quarter brightness by 780nm and
+a sixth by 1000nm, so the infrared tail reads as deep maroon rather than pretending to be visible red. The
+ultraviolet end below 380nm darkens the same way. Nothing goes fully black, so the filled area stays legible.
+
 ## Channels
 
 The card only needs the channel keys; wavelengths come from the built-in profile.

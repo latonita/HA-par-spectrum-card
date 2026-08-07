@@ -83,6 +83,7 @@ const DEFAULT_PROFILE = 'as7341';
 const DEFAULT_FULL_SCALE = 65535;
 const CURVE_RESOLUTION = 150;
 const CHART_PADDING = 50;
+const GRADIENT_STEP_NM = 5;
 
 function resolveProfileName(config) {
   if (config.model) {
@@ -129,6 +130,51 @@ function reconstruct(basis, readings) {
     for (let i = 0; i < basis.count; i++) spectrum[i] += column[i] * value;
   }
   return spectrum.map((value, i) => ({ wavelength: basis.from + i * basis.step, value }));
+}
+
+const VISIBLE_FADE_FLOOR = 0.1;
+
+function wavelengthRgb(nm) {
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  if (nm < 380) {
+    r = 0.4;
+    b = 1;
+  } else if (nm < 440) {
+    r = (440 - nm) / 60;
+    b = 1;
+  } else if (nm < 490) {
+    g = (nm - 440) / 50;
+    b = 1;
+  } else if (nm < 510) {
+    g = 1;
+    b = (510 - nm) / 20;
+  } else if (nm < 580) {
+    r = (nm - 510) / 70;
+    g = 1;
+  } else if (nm < 645) {
+    r = 1;
+    g = (645 - nm) / 65;
+  } else {
+    r = 1;
+  }
+
+  let level;
+  if (nm < 380) {
+    level = VISIBLE_FADE_FLOOR;
+  } else if (nm < 420) {
+    level = VISIBLE_FADE_FLOOR + (1 - VISIBLE_FADE_FLOOR) * ((nm - 380) / 40);
+  } else if (nm <= 700) {
+    level = 1;
+  } else if (nm <= 780) {
+    level = 1 - 0.75 * ((nm - 700) / 80);
+  } else {
+    level = Math.max(VISIBLE_FADE_FLOOR, 0.25 - 0.15 * ((nm - 780) / 220));
+  }
+
+  const channel = (v) => Math.round(255 * Math.pow(Math.max(0, Math.min(1, v)) * level, 0.8));
+  return [channel(r), channel(g), channel(b)];
 }
 
 function catmullRom(points, x) {
@@ -569,20 +615,12 @@ class AS734xSpectrumCard extends HTMLElement {
   }
 
   fillBand(ctx, chartWidth, chartHeight, alpha, useCurrentPath = false) {
-    const stops = [
-      [0.00, [138, 43, 226]],
-      [0.15, [75, 0, 130]],
-      [0.25, [0, 0, 255]],
-      [0.40, [0, 191, 255]],
-      [0.50, [0, 255, 0]],
-      [0.60, [173, 255, 47]],
-      [0.70, [255, 255, 0]],
-      [0.80, [255, 165, 0]],
-      [0.90, [255, 69, 0]],
-      [1.00, [255, 0, 0]],
-    ];
+    const [axisMin, axisMax] = this.axis;
     const gradient = ctx.createLinearGradient(CHART_PADDING, 0, CHART_PADDING + chartWidth, 0);
-    stops.forEach(([offset, [r, g, b]]) => gradient.addColorStop(offset, `rgba(${r}, ${g}, ${b}, ${alpha})`));
+    for (let nm = axisMin; nm <= axisMax; nm += GRADIENT_STEP_NM) {
+      const [r, g, b] = wavelengthRgb(nm);
+      gradient.addColorStop((nm - axisMin) / (axisMax - axisMin), `rgba(${r}, ${g}, ${b}, ${alpha})`);
+    }
     ctx.fillStyle = gradient;
     if (useCurrentPath) {
       ctx.fill();
@@ -617,4 +655,4 @@ window.customCards.push({
   description: 'Spectrum chart for AS7341 and AS7343 spectral sensors',
 });
 
-export { SPECTRAL_BASIS, SENSOR_PROFILES, resolveProfileName, sortedChannels, catmullRom, AS734xSpectrumCard };
+export { wavelengthRgb, SPECTRAL_BASIS, SENSOR_PROFILES, resolveProfileName, sortedChannels, catmullRom, AS734xSpectrumCard };
