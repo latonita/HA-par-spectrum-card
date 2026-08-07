@@ -237,7 +237,7 @@ test('reconstruction notes when the result dips well below zero', () => {
 
   const skewed = makeReconstructionCard('as7341',
     Object.fromEntries(basis.keys.map((k) => [k, k === 'clear' ? 0.01 : 20])));
-  assert.ok(skewed.reconstructionUndershoot() > 0.05,
+  assert.ok(skewed.reconstructionUndershoot() > 0.15,
     `expected a large negative excursion, got ${skewed.reconstructionUndershoot()}`);
   assert.equal(skewed.statusMessage().level, 'info');
   assert.match(skewed.statusMessage().text, /Approximation/);

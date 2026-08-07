@@ -84,6 +84,7 @@ const DEFAULT_FULL_SCALE = 65535;
 const CURVE_RESOLUTION = 150;
 const CHART_PADDING = 50;
 const GRADIENT_STEP_NM = 5;
+const UNDERSHOOT_NOTE_THRESHOLD = 0.15;
 
 function resolveProfileName(config) {
   if (config.model) {
@@ -426,7 +427,7 @@ class AS734xSpectrumCard extends HTMLElement {
       return { level: 'warning', text: `Reconstruction needs every channel. Missing: ${missing.join(', ')}.` };
     }
     const undershoot = this.reconstructionUndershoot();
-    if (undershoot > 0.05) {
+    if (undershoot > UNDERSHOOT_NOTE_THRESHOLD) {
       return {
         level: 'info',
         text: `Approximation dipped ${Math.round(undershoot * 100)}% below zero.`,
