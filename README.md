@@ -59,6 +59,7 @@ entities:
 | `model` | string | auto | `as7341` or `as7343`. Detected from the channel keys when omitted. |
 | `title` | string | `<model> Light Spectrum` | Card heading. |
 | `axis` | `[min, max]` | per model | Wavelength range of the x-axis, in nm. |
+| `mode` | string | plain spline | Set to `reconstruction` to rebuild the spectrum from the vendor basis. |
 | `full_scale` | number | `65535` | Highest count a channel can report, used for the saturation hint when no `saturation_level` entity is given. |
 
 `clear` and `nir` are read but not plotted. `clear` has no single centre wavelength, and `nir` sits far outside
@@ -77,6 +78,37 @@ Sorting matters on the AS7343, where ESPHome lists `fy` (555nm) before `f5` (550
 ascending wavelengths, so the card sorts rather than trusting config order. The curve endpoints are derived from
 the profile's axis for the same reason: fixed endpoints would land in the middle of the AS7343's range and
 corrupt everything past 690nm.
+
+## Reconstruction Mode
+
+```yaml
+type: custom:as734x-spectrum-card
+model: as7343
+mode: reconstruction
+entities: { ... every channel including clear and nir ... }
+```
+
+With `mode: reconstruction` the card stops plotting readings and rebuilds the spectrum instead:
+
+```
+S(lambda) = sum over channels of ( reading * weight[channel][lambda] )
+```
+
+The weights come from the manufacturer's golden-device workbook, one column per channel. That single step
+handles what a curve through the readings cannot: overlapping filters, differing responsivity, and the fact that
+some channels contribute negatively. The output spans 380 to 1000nm, so `nir` sits in proportion instead of
+towering over the visible bands.
+
+Every channel in the basis must be mapped, `clear` and `nir` included, or the card says which are missing and
+the result is wrong. The AS7343 basis leaves `f5` at zero throughout, matching the ESPHome driver, which treats
+it as redundant with the wider `fy`.
+
+The workbook is 1nm; the embedded copy is resampled to 5nm at four significant figures, which costs under 0.3%
+of peak and about seven eighths of the size. Regenerate it with:
+
+```bash
+python3 script/extract-basis.py as734x-golden.xlsx
+```
 
 ## Channels
 

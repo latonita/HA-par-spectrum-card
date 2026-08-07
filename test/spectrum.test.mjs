@@ -6,6 +6,7 @@ globalThis.customElements = { define() {} };
 globalThis.window = { customCards: [] };
 
 const {
+  SPECTRAL_BASIS,
   SENSOR_PROFILES,
   resolveProfileName,
   sortedChannels,
@@ -28,6 +29,21 @@ function makeCard(model, channelValues) {
   return card;
 }
 
+
+function makeReconstructionCard(model, values) {
+  const entities = Object.fromEntries(Object.keys(values).map((k) => [k, `sensor.${k}`]));
+  const states = Object.fromEntries(
+    Object.entries(values).map(([k, v]) => [`sensor.${k}`, { state: String(v), attributes: {} }]),
+  );
+  const card = Object.create(AS734xSpectrumCard.prototype);
+  card.render = () => {};
+  card.updateBanner = () => {};
+  card.draw = () => {};
+  card.setConfig({ model, mode: 'reconstruction', entities });
+  card._hass = { states };
+  card.update();
+  return card;
+}
 
 test('every profile lists channels the card can sort unambiguously', () => {
   for (const [name, profile] of Object.entries(SENSOR_PROFILES)) {
@@ -156,3 +172,58 @@ test('an empty channel set degrades quietly', () => {
   assert.match(card.statusMessage().text, /No spectral entities/);
 });
 
+
+test('a reconstruction basis exists for every profile and matches its channels', () => {
+  for (const model of Object.keys(SENSOR_PROFILES)) {
+    const basis = SPECTRAL_BASIS[model];
+    assert.ok(basis, `${model} has no basis`);
+    assert.equal(basis.weights.length, basis.keys.length);
+    for (const column of basis.weights) assert.equal(column.length, basis.count);
+
+    const plotted = SENSOR_PROFILES[model].channels.map((c) => c.key);
+    for (const key of plotted) assert.ok(basis.keys.includes(key), `${model}: basis lacks ${key}`);
+    assert.equal(basis.from, 380);
+    assert.equal(basis.from + (basis.count - 1) * basis.step, 1000);
+  }
+});
+
+test('the AS7343 basis leaves F5 at zero, as the driver does', () => {
+  const basis = SPECTRAL_BASIS.as7343;
+  const f5 = basis.weights[basis.keys.indexOf('f5')];
+  assert.ok(f5.every((w) => w === 0), 'F5 should contribute nothing to the reconstruction');
+  const fy = basis.weights[basis.keys.indexOf('fy')];
+  assert.ok(fy.some((w) => w !== 0), 'FY should contribute');
+});
+
+test('reconstruction is a plain weighted sum of the basis columns', () => {
+  const basis = SPECTRAL_BASIS.as7343;
+  const card = makeReconstructionCard('as7343', { f1: 2, fz: 3 });
+  const i = 20;
+  const expected =
+    2 * basis.weights[basis.keys.indexOf('f1')][i] + 3 * basis.weights[basis.keys.indexOf('fz')][i];
+  assert.ok(Math.abs(card._spectrum[i].value - expected) < 1e-12);
+  assert.equal(card._spectrum[i].wavelength, basis.from + i * basis.step);
+});
+
+test('reconstruction mode widens the axis to the basis range', () => {
+  const card = makeReconstructionCard('as7341', { f1: 1 });
+  assert.deepEqual(card.axis, [380, 1000]);
+  assert.ok(Number.isFinite(card.valueAt(500)));
+  assert.ok(Number.isFinite(card.valueAt(1000)));
+});
+
+test('reconstruction warns when a channel it needs is not configured', () => {
+  const card = makeReconstructionCard('as7343', { f1: 1 });
+  const message = card.statusMessage();
+  assert.equal(message.level, 'warning');
+  assert.match(message.text, /Reconstruction needs every channel/);
+  assert.match(message.text, /nir/);
+});
+
+test('an unknown model has no basis and is rejected up front', () => {
+  assert.throws(() => {
+    const card = Object.create(AS734xSpectrumCard.prototype);
+    card.render = () => {};
+    card.setConfig({ model: 'as7999', mode: 'reconstruction', entities: { f1: 'sensor.f1' } });
+  }, /Unknown model/);
+});
