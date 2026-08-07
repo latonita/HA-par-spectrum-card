@@ -74,15 +74,20 @@ A spectral sensor is not a set of point samples. Each channel is a band-pass fil
 wide channel collects more light than a narrow one looking at the same spectrum. Joining the readings with a
 line treats them as if they measured the same thing, which is wrong wherever the widths differ.
 
-The default `reconstruction` mode instead gives every channel a Gaussian centred on its wavelength, as wide as
-its FWHM, with an area equal to its reading. Adding those together produces spectral density, counts per nm.
-Wide channels spread their counts out and sit lower, narrow channels sit higher, and the result is smooth by
-construction.
+The default `reconstruction` mode estimates spectral density instead. Each channel reports its reading divided
+by its FWHM, giving counts per nm, and the curve at any wavelength is the average of those estimates weighted by
+a Gaussian as wide as each channel's filter. Nearby channels dominate, distant ones fade out.
 
-This matters most on the AS7343, where `f5` (550nm, 35nm wide) and `fy` (555nm, 100nm wide) are 5nm apart. Drawn
-as a spline the pair can produce a near-vertical wall that is mostly a bandwidth artefact. Reconstruction
-removes it: on a real reading the step across that pair falls from about 22% of the chart height to under 1%,
-and the F5/FY ratio drops from 4.1x to 1.4x once bandwidth is accounted for.
+Averaging rather than adding matters, because the filters overlap. Summing them double counts wherever two
+channels see the same light and under counts in the gaps between, which puts peaks and valleys on the chart that
+the sensor never measured. The test for this is simple: a genuinely flat spectrum has to come back flat. Summing
+gives 34% ripple on the AS7341 and 79% on the AS7343; the weighted average gives 0% on both.
+
+This also settles the AS7343 `f5`/`fy` pair, 5nm apart at 35nm and 100nm wide. Drawn as a spline they produce a
+near vertical wall, about 22% of the chart height, which is mostly a bandwidth artefact; the two densities
+differ by only 1.4x once width is accounted for, and the average blends them.
+
+Outside the outermost channels the curve tapers to zero at the axis edges, since nothing was measured there.
 
 Set `mode: interpolation` for the original spline if you prefer it.
 

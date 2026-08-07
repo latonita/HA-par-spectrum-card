@@ -114,16 +114,31 @@ function catmullRom(points, x) {
 }
 
 const FWHM_TO_SIGMA = 1 / (2 * Math.sqrt(2 * Math.LN2));
-const SQRT_TWO_PI = Math.sqrt(2 * Math.PI);
 
 function spectralDensity(channels, x) {
-  let sum = 0;
+  let weighted = 0;
+  let weight = 0;
   for (const ch of channels) {
     const sigma = ch.fwhm * FWHM_TO_SIGMA;
     const offset = x - ch.wavelength;
-    sum += (ch.value / (sigma * SQRT_TWO_PI)) * Math.exp(-(offset * offset) / (2 * sigma * sigma));
+    const w = Math.exp(-(offset * offset) / (2 * sigma * sigma));
+    weighted += w * (ch.value / ch.fwhm);
+    weight += w;
   }
-  return sum;
+  return weight > 0 ? weighted / weight : 0;
+}
+
+function smoothstep(edge0, edge1, x) {
+  const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
+function edgeTaper(channels, axis, x) {
+  const first = channels[0].wavelength;
+  const last = channels[channels.length - 1].wavelength;
+  if (x < first) return smoothstep(axis[0], first, x);
+  if (x > last) return 1 - smoothstep(last, axis[1], x);
+  return 1;
 }
 
 function canReconstruct(channels) {
@@ -348,7 +363,8 @@ class AS734xSpectrumCard extends HTMLElement {
   }
 
   valueAt(wavelength) {
-    return this._reconstruct ? spectralDensity(this._channels, wavelength) : catmullRom(this._curve, wavelength);
+    if (!this._reconstruct) return catmullRom(this._curve, wavelength);
+    return spectralDensity(this._channels, wavelength) * edgeTaper(this._channels, this.axis, wavelength);
   }
 
   sampleCurve(chartWidth, chartHeight) {
