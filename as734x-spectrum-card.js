@@ -429,7 +429,7 @@ class AS734xSpectrumCard extends HTMLElement {
     if (undershoot > 0.05) {
       return {
         level: 'info',
-        text: `Reconstruction is approximate; it dipped ${Math.round(undershoot * 100)}% below zero here.`,
+        text: `Approximation dipped ${Math.round(undershoot * 100)}% below zero.`,
       };
     }
     const values = this._channels.map((ch) => ch.value);

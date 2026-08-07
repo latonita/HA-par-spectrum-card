@@ -240,8 +240,8 @@ test('reconstruction notes when the result dips well below zero', () => {
   assert.ok(skewed.reconstructionUndershoot() > 0.05,
     `expected a large negative excursion, got ${skewed.reconstructionUndershoot()}`);
   assert.equal(skewed.statusMessage().level, 'info');
-  assert.match(skewed.statusMessage().text, /approximate/);
-  assert.ok(skewed.statusMessage().text.length < 90, 'the note should stay short');
+  assert.match(skewed.statusMessage().text, /Approximation/);
+  assert.ok(skewed.statusMessage().text.length <= 40, 'the note should stay short');
 });
 
 test('gradient colour follows wavelength, not chart position', () => {
