@@ -82,7 +82,7 @@ entities:
 the visible range with nothing between it and the last visible band. Both appear in the tooltip.
 
 `saturation_level` is optional. When present the card uses it directly instead of guessing from `full_scale`.
-ESPHome's `as734x` platform can publish it.
+ESPHome's `as734x` component can publish it.
 
 ## How the Curve Is Drawn
 
@@ -174,18 +174,25 @@ The card only needs the channel keys; wavelengths come from the built-in profile
 
 ## ESPHome
 
+The component is split into a hub and its entity platforms: the chip, the bus and the exposure settings go
+under `as734x:`, the entities under `sensor:` and `text_sensor:`.
+
 ```yaml
 i2c:
   sda: GPIOXX
   scl: GPIOXX
 
-sensor:
-  - platform: as734x
+as734x:
+  - id: spectral_sensor
     type: AS7343
     gain: X8
     atime: 29
     astep: 599
     update_interval: 10s
+
+sensor:
+  - platform: as734x
+    as734x_id: spectral_sensor
     counts:
       f1: { name: "F1" }
       f2: { name: "F2" }
@@ -204,8 +211,15 @@ sensor:
       name: "Saturation"
 ```
 
-Use `type: AS7341` for the AS7341. The older `as7341` platform works too, but reports its counts byte-swapped;
-prefer `as734x`.
+Use `type: AS7341` for the AS7341. `as734x_id` can be left out when there is only one hub. The older `as7341`
+platform works too, but reports its counts byte-swapped; prefer `as734x`.
+
+Besides the counts, the hub publishes `illuminance`, `irradiance_photopic`, `irradiance_par`, `ppfd` and
+`color_temperature` sensors, and an `rgb_hex` text sensor on the `text_sensor` platform. The card does not read
+any of them; the colour temperature is what the halogen reconstructions above are compared against.
+
+The component also drives the TCS3448, which carries the same thirteen channels as the AS7343. The card has no
+profile for it yet, so plot it as `model: as7343` or add an entry of its own.
 
 Full scale for a reading is `(atime + 1) x (astep + 1)`, capped at 65535, so the defaults above top out at
 18000. Set `full_scale` on the card to match, or wire up `saturation_level` and let the card read it.
